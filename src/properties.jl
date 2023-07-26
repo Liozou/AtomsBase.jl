@@ -10,7 +10,7 @@ is chosen to be more specific (i.e. designate a special atom).
 function element_symbol(system::AbstractSystem)
     # Note that atomic_symbol cannot be used here, since this may map
     # to something more specific than the element
-    [Symbol(element(num).symbol) for num in atomic_number(system)]
+    [(el = element(atomic_number(system, i)); ismissing(el) ? :? : Symbol(el.symbol)) for i in 1:length(system)]
 end
 
 

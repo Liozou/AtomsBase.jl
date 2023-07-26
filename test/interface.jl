@@ -69,6 +69,6 @@ using PeriodicTable
         @test element(14).name == "Silicon"
 
         @test_throws ArgumentError element("Si")
-        @test_throws KeyError element(0)
+        @test element(0) === missing
     end
 end

@@ -19,7 +19,6 @@ position(atom::Atom)      = atom.position
 atomic_mass(atom::Atom)   = atom.atomic_mass
 atomic_symbol(atom::Atom) = atom.atomic_symbol
 atomic_number(atom::Atom) = atom.atomic_number
-element(atom::Atom)       = element(atomic_number(atom))
 n_dimensions(::Atom{D}) where {D} = D
 
 Base.getindex(at::Atom, x::Symbol) = hasfield(Atom, x) ? getfield(at, x) : getindex(at.data, x)
@@ -35,29 +34,64 @@ Base.pairs(at::Atom) = (k => at[k] for k in keys(at))
 """
     Atom(identifier::AtomId, position::AbstractVector; kwargs...)
     Atom(identifier::AtomId, position::AbstractVector, velocity::AbstractVector; kwargs...)
-    Atom(; atomic_number, position, velocity=zeros(D)u"bohr/s", kwargs...)
+    Atom(; atomic_symbol::Symbol, position, velocity=zeros(length(position))u"bohr/s", kwargs...)
+    Atom(; atomic_number::Integer, position, velocity=zeros(length(position))u"bohr/s", kwargs...)
 
-Construct an atomic located at the cartesian coordinates `position` with (optionally)
+Construct an atomic species located at the cartesian coordinates `position` with (optionally)
 the given cartesian `velocity`. Note that `AtomId = Union{Symbol,AbstractString,Integer}`.
 
 Supported `kwargs` include `atomic_symbol`, `atomic_number`, `atomic_mass`, `charge`,
 `multiplicity` as well as user-specific custom properties.
+
+## Default values
+
+If the `identifier` corresponds to a known atom, `atomic_symbol`, `atomic_number` and
+`atomic_mass` are set according the `element(identifier)`.
+
+Otherwise, the default values are:
+- `atomic_symbol`: `identifier` if `identifier isa Symbol`, else `:?`
+- `atomic_number`: `identifier` if `identifier isa Integer`, else `0`
+- `atomic_mass`: `NaN*u"u"`
+
+The default `velocity` is zero. The other properties have no default values.
 """
 function Atom(identifier::AtomId,
               position::AbstractVector{L},
               velocity::AbstractVector{V}=zeros(length(position))u"bohr/s";
-              atomic_symbol=Symbol(element(identifier).symbol),
-              atomic_number=element(identifier).number,
-              atomic_mass::M=element(identifier).atomic_mass,
-              kwargs...) where {L <: Unitful.Length, V <: Unitful.Velocity, M <: Unitful.Mass}
-    Atom{length(position), L, V, M}(position, velocity, atomic_symbol,
+              atomic_symbol=nothing,
+              atomic_number=nothing,
+              atomic_mass=nothing,
+              kwargs...) where {L <: Unitful.Length, V <: Unitful.Velocity}
+    isnothing(atomic_symbol) && identifier isa Symbol && (atomic_symbol = identifier)
+    isnothing(atomic_number) && identifier isa Integer && (atomic_number = identifier)
+    if isnothing(atomic_symbol) | isnothing(atomic_number) | isnothing(atomic_mass)
+        el = element(identifier)
+        if !ismissing(el) # set appropriate defaults if available
+            isnothing(atomic_symbol) && (atomic_symbol = Symbol(el.symbol))
+            isnothing(atomic_number) && (atomic_number = el.number)
+            isnothing(atomic_mass) && (atomic_mass = el.atomic_mass)
+        else # set fallback defaults
+            isnothing(atomic_symbol) && (atomic_symbol = :?)
+            isnothing(atomic_number) && (atomic_number = 0)
+            isnothing(atomic_mass) && (atomic_mass = NaN*u"u")
+        end
+    end
+    Atom{length(position), L, V, typeof(atomic_mass)}(position, velocity, atomic_symbol,
                                     atomic_number, atomic_mass, Dict(kwargs...))
 end
 function Atom(id::AtomId, position::AbstractVector, velocity::Missing; kwargs...)
     Atom(id, position, zeros(length(position))u"bohr/s"; kwargs...)
 end
-function Atom(; atomic_symbol, position, velocity=zeros(length(position))u"bohr/s", kwargs...)
-    Atom(atomic_symbol, position, velocity; atomic_symbol, kwargs...)
+function Atom(; position, velocity=zeros(length(position))u"bohr/s", kwargs...)
+    atomic_number = get(kwargs, :atomic_number, missing)
+    if !ismissing(atomic_number)
+        return Atom(atomic_number::Integer, position, velocity; kwargs...)
+    end
+    atomic_symbol = get(kwargs, :atomic_symbol, missing)
+    if !ismissing(atomic_symbol)
+        return Atom(atomic_symbol::Symbol, position, velocity; kwargs...)
+    end
+    error("Atom(; ...) call requires either atomic_number of atomic_symbol among its keyword arguments")
 end
 
 """

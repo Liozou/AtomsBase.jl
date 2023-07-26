@@ -87,26 +87,55 @@ end
 # Species property accessors from systems and species
 #
 
-"""The element corresponding to a species/atom (or missing)."""
-element(id::Union{Symbol,Integer}) = PeriodicTable.elements[id]  # Keep for better inlining
-function element(name::AbstractString)
-    try
-        return PeriodicTable.elements[name]
-    catch e
-        if e isa KeyError
-            throw(ArgumentError(
-                "Unknown element name: $name. " *
-                "Note that AtomsBase uses PeriodicTables to resolve element identifiers, " *
-                "where strings are considered element names. To lookup an element by " *
-                "element symbol use `Symbol`s instead, e.g. "*
-                """`Atom(Symbol("Si"), zeros(3)u"Å")` or `Atom("silicon", zeros(3)u"Å")`."""
-            ))
-        else
-            rethrow()
-        end
-    end
-end
+"""
+    element(id::Union{Symbol,Integer})
+    element(name::AbstractString)
+    element(species)
 
+The element corresponding to a species/atom.
+
+Note that AtomsBase uses PeriodicTables to resolve element identifiers, where strings are
+considered element names. To lookup an element by element symbol use `Symbol`s instead.
+
+If the input is an unknown `name` (an `AbstractString`), error.
+If it is an unknown `id` (`Symbol` or `Integer`) or `species`, return `missing`.
+
+# Example
+```jldoctest; setup=:(using AtomsBase, Unitful)
+julia> element(12) isa AtomsBase.PeriodicTable.Element
+true
+
+julia> element(3).symbol
+"Li"
+
+julia> element(3) == element(:Li) == element("lithium")
+true
+
+julia> element(14) == element(Atom(:Si, zeros(3)u"Å"))
+true
+
+julia> element(0)
+missing
+
+julia> element("Si")
+ERROR: ArgumentError: Unknown element name: Si.
+Note that AtomsBase uses PeriodicTables to resolve element identifiers, where strings are considered element names. To lookup an element by element symbol use `Symbol`s instead, e.g. `Atom(Symbol("Si"), zeros(3)u"Å")` or `Atom("silicon", zeros(3)u"Å")`
+[...]
+```
+"""
+element(id::Union{Symbol,Integer}) = get(PeriodicTable.elements, id, missing)
+element(species) = element(atomic_number(species))
+function element(name::AbstractString)
+    elem = get(PeriodicTable.elements, name, missing)
+    elem isa PeriodicTable.Element && return elem
+    throw(ArgumentError(
+            """Unknown element name: $name.
+            Note that AtomsBase uses PeriodicTables to resolve element identifiers, \
+            where strings are considered element names. To lookup an element by \
+            element symbol use `Symbol`s instead, e.g. \
+            `Atom(Symbol("Si"), zeros(3)u"Å")` or `Atom("silicon", zeros(3)u"Å")`."""
+    ))
+end
 
 """
     position(sys::AbstractSystem{D})
